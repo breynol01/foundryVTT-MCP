@@ -1,0 +1,16 @@
+{
+  "name": "foundryvtt-mcp-proxy",
+  "version": "0.2.0",
+  "description": "Railway-ready proxy for Foundry VTT LLM workflows",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
