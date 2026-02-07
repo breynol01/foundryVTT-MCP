@@ -17,6 +17,9 @@ If your MCP server runs locally, use a tunnel to expose it to Forge:
 3. Paste the tunnel URL into **Runner URL**.
 4. Use your MCP token as **Runner Token** (sent in `X-Foundry-Runner-Token`).
 
+## Obsidian mode (Prompt Panel)
+Select provider **obsidian** to request payloads from the local Obsidian agent. Optionally provide comma-separated paths and a type filter.
+
 ## Import Payload Schema (MVP)
 Paste JSON into the Import dialog using the following shapes.
 

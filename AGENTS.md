@@ -5,6 +5,7 @@ This repo is a small Node.js proxy for Foundry VTT LLM workflows.
 - `src/index.js` – Express server with the API routes and OpenAI proxy logic.
 - `runner/` – Railway-hosted CLI runner (Codex/Claude) for prompt execution.
 - `foundry-mcp/` – Foundry VTT module (client) with prompt panel and import dialog.
+- `obsidian-agent/` – Local Obsidian vault agent for Foundry payloads.
 - No dedicated `tests/` or `assets/` directories yet; add them when the project grows.
 
 If you add modules, keep feature groupings under `src/` (e.g., `src/routes/`, `src/services/`).

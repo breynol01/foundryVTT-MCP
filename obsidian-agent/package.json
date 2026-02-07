@@ -1,0 +1,17 @@
+{
+  "name": "foundry-obsidian-agent",
+  "version": "0.0.1",
+  "description": "Local Obsidian vault agent that emits Foundry payloads",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "gray-matter": "^4.0.3"
+  }
+}

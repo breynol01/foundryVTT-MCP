@@ -70,6 +70,39 @@ If you run your MCP server locally, you can expose it to Forge using a tunnel.
 4. Set **Runner URL** in Foundry to that public URL.
 5. Set **Runner Token** to the same token your MCP server expects in `X-Foundry-Runner-Token`.
 
+## Obsidian agent (local)
+
+The `obsidian-agent/` directory contains a local service that scans your Obsidian vault and returns Foundry payloads.
+
+### Obsidian agent setup
+
+```bash
+cd obsidian-agent
+npm install
+npm start
+```
+
+### Obsidian agent environment variables
+
+- `VAULT_PATH` (required): Absolute path to your Obsidian vault.
+- `RUNNER_TOKEN` (required): Shared secret sent in `X-Foundry-Runner-Token`.
+- `PORT` (optional): Default `8790`.
+
+### Obsidian payload endpoint
+
+`POST /v1/payload` returns a Foundry payload based on frontmatter in your notes.
+
+```json
+{
+  \"paths\": [\"NPCs/Gandrel.md\"],
+  \"type\": \"npc\"
+}
+```
+
+### Foundry prompt panel (Obsidian)
+
+Select provider **obsidian** in the prompt panel and optionally set paths/type to fetch payloads from the local agent.
+
 ## Runner service (CLI)
 
 The `runner/` directory contains a Railway-hosted runner that invokes Codex/Claude CLIs and returns Foundry JSON payloads.

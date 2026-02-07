@@ -42,6 +42,34 @@
     return response.json();
   }
 
+  async function requestPayload(payload) {
+    const runnerUrl = getRunnerUrl();
+    const runnerToken = getRunnerToken();
+
+    if (!runnerUrl) {
+      throw new Error("Foundry MCP: runner URL is not configured.");
+    }
+    if (!runnerToken) {
+      throw new Error("Foundry MCP: runner token is not configured.");
+    }
+
+    const response = await fetch(`${runnerUrl}/v1/payload`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Foundry-Runner-Token": runnerToken
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Foundry MCP: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async function requestLLM(payload) {
     return requestRunner(payload);
   }
@@ -165,9 +193,11 @@
         ? JSON.stringify(this._payload, null, 2)
         : "";
       return {
-        providers: ["codex", "claude"],
+        providers: ["codex", "claude", "obsidian"],
         prompt: this._prompt || "",
         model: this._model || "",
+        paths: this._paths || "",
+        filterType: this._filterType || "",
         response: this._response || "",
         payload: payloadText,
         hasPayload: Boolean(this._payload)
@@ -189,25 +219,45 @@
       const provider = html.find("[name='provider']").val();
       const prompt = (html.find("[name='prompt']").val() || "").trim();
       const model = (html.find("[name='model']").val() || "").trim();
+      const pathsRaw = (html.find("[name='paths']").val() || "").trim();
+      const filterType = (html.find("[name='filterType']").val() || "").trim();
 
-      if (!prompt) {
+      if (provider !== "obsidian" && !prompt) {
         ui.notifications.warn("Foundry MCP: enter a prompt first.");
         return;
       }
 
       this._prompt = prompt;
       this._model = model;
+      this._paths = pathsRaw;
+      this._filterType = filterType;
 
       try {
-        const result = await requestRunner({
-          provider,
-          prompt,
-          model: model || undefined,
-          options: { responseFormat: "json" }
-        });
+        let result;
+
+        if (provider === "obsidian") {
+          const paths = pathsRaw
+            ? pathsRaw.split(",").map((value) => value.trim()).filter(Boolean)
+            : undefined;
+          result = await requestPayload({
+            paths,
+            type: filterType || undefined
+          });
+        } else {
+          result = await requestRunner({
+            provider,
+            prompt,
+            model: model || undefined,
+            options: { responseFormat: "json" }
+          });
+        }
 
         this._response = result.content || "";
         this._payload = result.payload || null;
+
+        if (provider === "obsidian") {
+          this._payload = result.documents ? result : result.payload || result;
+        }
 
         if (!this._payload && this._response) {
           try {
@@ -283,6 +333,7 @@
     const api = {
       requestLLM,
       requestRunner,
+      requestPayload,
       importPayload,
       openImportDialog: () => new FoundryMCPImportApp().render(true),
       openPromptPanel: () => new FoundryMCPPromptApp().render(true)
