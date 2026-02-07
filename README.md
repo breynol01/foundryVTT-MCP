@@ -39,8 +39,9 @@ https://github.com/breynol01/foundryVTT-MCP/releases/latest/download/module.json
 
 ### Usage (MVP)
 
-- Configure **Proxy URL** and **Proxy Token** in Foundry module settings.
-- Open **Import JSON** from the module settings menu.
+- Configure **Runner URL** and **Runner Token** in Foundry module settings.
+- Open **Prompt Panel** to send a prompt to the runner and import returned JSON.
+- Or open **Import JSON** to paste payloads manually.
 - Paste a payload like:
 
 ```
@@ -53,6 +54,42 @@ https://github.com/breynol01/foundryVTT-MCP/releases/latest/download/module.json
   ]
 }
 ```
+
+## Runner service (CLI)
+
+The `runner/` directory contains a Railway-hosted runner that invokes Codex/Claude CLIs and returns Foundry JSON payloads.
+
+### Runner setup
+
+```bash
+cd runner
+npm install
+npm start
+```
+
+### Runner CLI installs
+
+The runner executes installed CLIs. You can install these globally or use the provided Dockerfile.
+
+- Codex CLI: `npm i -g @openai/codex`
+- Claude CLI: `npm i -g @anthropic-ai/claude-code`
+
+### Runner environment variables
+
+- `RUNNER_TOKEN` (required): Shared secret sent in `X-Foundry-Runner-Token`.
+- `ALLOWED_ORIGINS` (optional): Comma-separated list of allowed browser origins for CORS.
+- `REQUEST_TIMEOUT_MS` (optional): Request timeout in ms (default: `60000`).
+- `MAX_OUTPUT_BYTES` (optional): Max stdout+stderr bytes (default: `1000000`).
+- `MAX_PROMPT_CHARS` (optional): Max prompt length (default: `8000`).
+- `MAX_COST_USD` (optional): Cost ceiling (default: `0.5`).
+- `COST_PER_1K_TOKENS_CODEX` / `COST_PER_1K_TOKENS_CLAUDE` (optional): Cost estimation.
+- `TOKEN_CHARS_PER_TOKEN` (optional): Token estimate divisor (default: `4`).
+- `CODEX_COMMAND` / `CLAUDE_COMMAND` (optional): CLI command names.
+- `CODEX_ARGS` / `CLAUDE_ARGS` (optional): Args list. Use `{{prompt}}` to inline the prompt or omit to send via stdin. Use `{{model}}` to substitute the model.
+
+### Railway deploy (runner)
+
+Use `runner/Dockerfile` as the service build to ensure the CLIs are installed in the image.
 
 ## Setup
 

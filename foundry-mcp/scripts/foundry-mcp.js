@@ -5,31 +5,31 @@
     return game.settings.get(MODULE_ID, key);
   }
 
-  function getProxyUrl() {
+  function getRunnerUrl() {
     const value = getSetting("proxyUrl").trim();
     return value.replace(/\/$/, "");
   }
 
-  function getProxyToken() {
+  function getRunnerToken() {
     return getSetting("proxyToken").trim();
   }
 
-  async function requestLLM(payload) {
-    const proxyUrl = getProxyUrl();
-    const proxyToken = getProxyToken();
+  async function requestRunner(payload) {
+    const runnerUrl = getRunnerUrl();
+    const runnerToken = getRunnerToken();
 
-    if (!proxyUrl) {
-      throw new Error("Foundry MCP: proxy URL is not configured.");
+    if (!runnerUrl) {
+      throw new Error("Foundry MCP: runner URL is not configured.");
     }
-    if (!proxyToken) {
-      throw new Error("Foundry MCP: proxy token is not configured.");
+    if (!runnerToken) {
+      throw new Error("Foundry MCP: runner token is not configured.");
     }
 
-    const response = await fetch(`${proxyUrl}/v1/generate`, {
+    const response = await fetch(`${runnerUrl}/v1/cli/run`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Foundry-Proxy-Token": proxyToken
+        "X-Foundry-Runner-Token": runnerToken
       },
       body: JSON.stringify(payload)
     });
@@ -40,6 +40,10 @@
     }
 
     return response.json();
+  }
+
+  async function requestLLM(payload) {
+    return requestRunner(payload);
   }
 
   async function ensureCompendium(definition) {
@@ -145,10 +149,102 @@
     }
   }
 
+  class FoundryMCPPromptApp extends FormApplication {
+    static get defaultOptions() {
+      return mergeObject(super.defaultOptions, {
+        id: "foundry-mcp-prompt",
+        title: "Foundry MCP Prompt",
+        template: "modules/foundry-mcp/templates/prompt-panel.html",
+        width: 560,
+        height: "auto"
+      });
+    }
+
+    getData() {
+      const payloadText = this._payload
+        ? JSON.stringify(this._payload, null, 2)
+        : "";
+      return {
+        providers: ["codex", "claude"],
+        prompt: this._prompt || "",
+        model: this._model || "",
+        response: this._response || "",
+        payload: payloadText,
+        hasPayload: Boolean(this._payload)
+      };
+    }
+
+    activateListeners(html) {
+      super.activateListeners(html);
+      html.find("[data-action='run']").on("click", (event) =>
+        this._onRun(event, html)
+      );
+      html.find("[data-action='import']").on("click", (event) =>
+        this._onImport(event)
+      );
+    }
+
+    async _onRun(event, html) {
+      event.preventDefault();
+      const provider = html.find("[name='provider']").val();
+      const prompt = (html.find("[name='prompt']").val() || "").trim();
+      const model = (html.find("[name='model']").val() || "").trim();
+
+      if (!prompt) {
+        ui.notifications.warn("Foundry MCP: enter a prompt first.");
+        return;
+      }
+
+      this._prompt = prompt;
+      this._model = model;
+
+      try {
+        const result = await requestRunner({
+          provider,
+          prompt,
+          model: model || undefined,
+          options: { responseFormat: "json" }
+        });
+
+        this._response = result.content || "";
+        this._payload = result.payload || null;
+
+        if (!this._payload && this._response) {
+          try {
+            const parsed = JSON.parse(this._response);
+            if (parsed && typeof parsed === "object") {
+              this._payload = parsed.payload || parsed;
+            }
+          } catch {
+            // leave payload empty
+          }
+        }
+
+        const payloadText = this._payload
+          ? JSON.stringify(this._payload, null, 2)
+          : "";
+        html.find("[name='response']").val(this._response);
+        html.find("[name='payload']").val(payloadText);
+        html.find("[data-action='import']").prop("disabled", !this._payload);
+      } catch (error) {
+        ui.notifications.error(error.message);
+      }
+    }
+
+    async _onImport(event) {
+      event.preventDefault();
+      if (!this._payload) {
+        ui.notifications.warn("Foundry MCP: no payload to import.");
+        return;
+      }
+      await importPayload(this._payload);
+    }
+  }
+
   Hooks.once("init", () => {
     game.settings.register(MODULE_ID, "proxyUrl", {
-      name: "Proxy URL",
-      hint: "Base URL of the MCP proxy service (e.g. https://your-app.up.railway.app).",
+      name: "Runner URL",
+      hint: "Base URL of the MCP runner service (e.g. https://your-app.up.railway.app).",
       scope: "client",
       config: true,
       type: String,
@@ -156,8 +252,8 @@
     });
 
     game.settings.register(MODULE_ID, "proxyToken", {
-      name: "Proxy Token",
-      hint: "Shared secret sent in X-Foundry-Proxy-Token.",
+      name: "Runner Token",
+      hint: "Shared secret sent in X-Foundry-Runner-Token.",
       scope: "client",
       config: true,
       type: String,
@@ -172,13 +268,24 @@
       type: FoundryMCPImportApp,
       restricted: false
     });
+
+    game.settings.registerMenu(MODULE_ID, "promptMenu", {
+      name: "Prompt Panel",
+      label: "Open Prompt Panel",
+      hint: "Send prompts to the runner and import the returned JSON payload.",
+      icon: "fas fa-terminal",
+      type: FoundryMCPPromptApp,
+      restricted: false
+    });
   });
 
   Hooks.once("ready", () => {
     const api = {
       requestLLM,
+      requestRunner,
       importPayload,
-      openImportDialog: () => new FoundryMCPImportApp().render(true)
+      openImportDialog: () => new FoundryMCPImportApp().render(true),
+      openPromptPanel: () => new FoundryMCPPromptApp().render(true)
     };
 
     game.modules.get(MODULE_ID).api = api;
