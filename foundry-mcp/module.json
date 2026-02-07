@@ -2,7 +2,7 @@
   "id": "foundry-mcp",
   "title": "Foundry MCP",
   "description": "Minimal Foundry VTT module for MCP-driven asset creation via a proxy service.",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "license": "MIT",
   "authors": [
     {
