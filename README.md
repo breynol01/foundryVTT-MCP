@@ -55,6 +55,21 @@ https://github.com/breynol01/foundryVTT-MCP/releases/latest/download/module.json
 }
 ```
 
+### Local MCP + Cloudflare Tunnel (no Railway)
+
+If you run your MCP server locally, you can expose it to Forge using a tunnel.
+
+1. Start your MCP server locally (port `8787` assumed).
+2. Start the tunnel:
+
+```
+./scripts/start-tunnel.sh
+```
+
+3. Copy the public URL printed by `cloudflared`.
+4. Set **Runner URL** in Foundry to that public URL.
+5. Set **Runner Token** to the same token your MCP server expects in `X-Foundry-Runner-Token`.
+
 ## Runner service (CLI)
 
 The `runner/` directory contains a Railway-hosted runner that invokes Codex/Claude CLIs and returns Foundry JSON payloads.

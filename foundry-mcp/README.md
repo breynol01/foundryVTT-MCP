@@ -9,6 +9,14 @@ Minimal client-only Foundry VTT module that connects to the MCP proxy and import
 ## Prompt Panel
 Open **Prompt Panel** from module settings to send a prompt to the runner. The response and JSON payload will display in the panel and can be imported directly.
 
+## Local MCP + Tunnel (Forge)
+If your MCP server runs locally, use a tunnel to expose it to Forge:
+
+1. Run MCP on `localhost:8787`.
+2. Start a Cloudflare tunnel: `./scripts/start-tunnel.sh`
+3. Paste the tunnel URL into **Runner URL**.
+4. Use your MCP token as **Runner Token** (sent in `X-Foundry-Runner-Token`).
+
 ## Import Payload Schema (MVP)
 Paste JSON into the Import dialog using the following shapes.
 
