@@ -2,6 +2,58 @@
 
 Railway-ready proxy service for Foundry VTT LLM workflows. This service accepts requests from a Foundry module and forwards them to OpenAI, keeping API keys on the server side.
 
+## Foundry module (client)
+
+The `foundry-mcp/` directory contains a minimal Foundry VTT module that stores proxy settings and provides a JSON import dialog for creating Foundry documents from Codex output.
+
+### Install (manifest URL)
+
+1. Create a GitHub release that includes a zip named `foundry-mcp.zip` containing the `foundry-mcp/` folder at the top level.
+2. Upload the module manifest as `module.json` (use `foundry-mcp/module.json`).
+3. Install in Foundry using the manifest URL:
+
+```
+https://github.com/breynol01/foundryVTT-MCP/releases/latest/download/module.json
+```
+
+### Build the module zip
+
+```
+./scripts/build-module.sh
+```
+
+This writes `dist/foundry-mcp.zip` and `dist/module.json` for release uploads.
+
+### Release checklist
+
+1. Update version in `foundry-mcp/module.json`.
+2. Commit and push changes.
+3. Create a GitHub release (tagged). The workflow will build and attach:
+   - `dist/foundry-mcp.zip`
+   - `dist/module.json`
+4. Install using the manifest URL:
+
+```
+https://github.com/breynol01/foundryVTT-MCP/releases/latest/download/module.json
+```
+
+### Usage (MVP)
+
+- Configure **Proxy URL** and **Proxy Token** in Foundry module settings.
+- Open **Import JSON** from the module settings menu.
+- Paste a payload like:
+
+```
+{
+  "documents": [
+    {
+      "type": "JournalEntry",
+      "data": { "name": "MCP Journal", "content": "<p>Hello from Codex.</p>" }
+    }
+  ]
+}
+```
+
 ## Setup
 
 ```bash

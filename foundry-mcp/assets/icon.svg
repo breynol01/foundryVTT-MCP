@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Foundry MCP">
+  <defs>
+    <linearGradient id="forgeGlow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="#111827"/>
+  <rect x="28" y="28" width="200" height="200" rx="36" fill="#1f2937"/>
+  <path d="M64 160h128v24H64z" fill="#0f172a"/>
+  <path d="M80 112h96l16 24-16 24H80l-16-24z" fill="#1f2937" stroke="#9ca3af" stroke-width="6"/>
+  <path d="M104 88h48l12 18-12 18h-48l-12-18z" fill="url(#forgeGlow)"/>
+  <path d="M96 176h64l-8 24H104z" fill="#374151"/>
+  <g fill="#f8fafc">
+    <circle cx="112" cy="136" r="6"/>
+    <circle cx="144" cy="136" r="6"/>
+  </g>
+  <path d="M48 96h24" stroke="#f59e0b" stroke-width="10" stroke-linecap="round"/>
+  <path d="M184 80h24" stroke="#f59e0b" stroke-width="10" stroke-linecap="round"/>
+</svg>
