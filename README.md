@@ -1,6 +1,6 @@
 # foundryVTT-MCP
 
-Railway-ready proxy service for Foundry VTT LLM workflows. This service accepts requests from a Foundry module and forwards them to OpenAI, keeping API keys on the server side.
+Railway-ready proxy service for Foundry VTT LLM workflows. This service accepts requests from a Foundry module and forwards them to OpenAI Responses API, keeping API keys on the server side.
 
 ## Foundry module (client)
 
@@ -156,6 +156,12 @@ npm start
 - `ALLOWED_ORIGINS` (optional): Comma-separated list of allowed browser origins for CORS.
 - `REQUEST_TIMEOUT_MS` (optional): Request timeout in ms (default: `30000`).
 - `MAX_PROMPT_CHARS` (optional): Maximum prompt size in characters (default: `8000`).
+- `RATE_LIMIT_WINDOW_MS` (optional): In-memory rate-limit window (default: `60000`).
+- `RATE_LIMIT_MAX_REQUESTS` (optional): Max requests per client/IP per window (default: `30`). Set `0` to disable.
+- `TOKEN_CHARS_PER_TOKEN` (optional): Char-to-token estimate divisor for budget checks (default: `4`).
+- `MAX_ESTIMATED_TOKENS` (optional): Reject requests above estimated input+output token total. Set `0` to disable.
+- `MAX_ESTIMATED_COST_USD` (optional): Reject requests above estimated cost. Set `0` to disable.
+- `COST_PER_1K_TOKENS_USD` (optional): Cost estimate input used with `MAX_ESTIMATED_COST_USD`.
 
 ## Request example
 

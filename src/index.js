@@ -12,10 +12,17 @@ const {
   DEFAULT_MODEL = "gpt-4o-mini",
   ALLOWED_ORIGINS,
   REQUEST_TIMEOUT_MS = 30000,
-  MAX_PROMPT_CHARS = 8000
+  MAX_PROMPT_CHARS = 8000,
+  RATE_LIMIT_WINDOW_MS = 60000,
+  RATE_LIMIT_MAX_REQUESTS = 30,
+  TOKEN_CHARS_PER_TOKEN = 4,
+  MAX_ESTIMATED_TOKENS = 0,
+  MAX_ESTIMATED_COST_USD = 0,
+  COST_PER_1K_TOKENS_USD = 0
 } = process.env;
 
 const allowedProviders = new Set(["openai"]);
+const rateLimitBuckets = new Map();
 
 const corsOptions = (() => {
   if (!ALLOWED_ORIGINS) {
@@ -52,6 +59,103 @@ function assertAuth(req, res) {
   return true;
 }
 
+function toNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getClientKey(req, clientId) {
+  if (clientId && typeof clientId === "string") {
+    return `client:${clientId}`;
+  }
+  return `ip:${req.ip || "unknown"}`;
+}
+
+function assertRateLimit(req, res, clientId) {
+  const maxRequests = toNumber(RATE_LIMIT_MAX_REQUESTS, 0);
+  const windowMs = toNumber(RATE_LIMIT_WINDOW_MS, 60000);
+
+  if (maxRequests <= 0 || windowMs <= 0) {
+    return true;
+  }
+
+  const now = Date.now();
+  const clientKey = getClientKey(req, clientId);
+  const current = rateLimitBuckets.get(clientKey);
+
+  if (!current || now >= current.resetAt) {
+    rateLimitBuckets.set(clientKey, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (current.count >= maxRequests) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((current.resetAt - now) / 1000)
+    );
+    res.set("Retry-After", String(retryAfterSeconds));
+    res.status(429).json({
+      error: "Rate limit exceeded.",
+      retryAfterSeconds
+    });
+    return false;
+  }
+
+  current.count += 1;
+  return true;
+}
+
+function estimateTokenBudget({ formattedMessages, maxTokens }) {
+  const tokenChars = Math.max(1, toNumber(TOKEN_CHARS_PER_TOKEN, 4));
+  const inputChars = formattedMessages.reduce(
+    (total, message) => total + message.content.length,
+    0
+  );
+  const inputTokens = Math.ceil(inputChars / tokenChars);
+  const outputTokens = Math.max(0, toNumber(maxTokens, 0));
+  return {
+    inputTokens,
+    outputTokens,
+    estimatedTotalTokens: inputTokens + outputTokens
+  };
+}
+
+function assertBudget({ res, formattedMessages, maxTokens }) {
+  const { inputTokens, outputTokens, estimatedTotalTokens } = estimateTokenBudget(
+    { formattedMessages, maxTokens }
+  );
+  const maxEstimatedTokens = toNumber(MAX_ESTIMATED_TOKENS, 0);
+
+  if (maxEstimatedTokens > 0 && estimatedTotalTokens > maxEstimatedTokens) {
+    res.status(400).json({
+      error: "Estimated token budget exceeded.",
+      estimatedTotalTokens,
+      maxEstimatedTokens
+    });
+    return false;
+  }
+
+  const maxEstimatedCostUsd = toNumber(MAX_ESTIMATED_COST_USD, 0);
+  const costPer1kTokensUsd = toNumber(COST_PER_1K_TOKENS_USD, 0);
+  if (maxEstimatedCostUsd > 0 && costPer1kTokensUsd > 0) {
+    const estimatedCostUsd =
+      (estimatedTotalTokens / 1000) * costPer1kTokensUsd;
+    if (estimatedCostUsd > maxEstimatedCostUsd) {
+      res.status(400).json({
+        error: "Estimated cost budget exceeded.",
+        estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+        maxEstimatedCostUsd,
+        estimatedTotalTokens,
+        inputTokens,
+        outputTokens
+      });
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function normalizeMessages({ messages, system, prompt }) {
   if (Array.isArray(messages) && messages.length > 0) {
     const normalized = messages
@@ -72,6 +176,29 @@ function normalizeMessages({ messages, system, prompt }) {
     system ? { role: "system", content: system } : null,
     { role: "user", content: prompt }
   ].filter(Boolean);
+}
+
+function formatResponsesInput(formattedMessages) {
+  return formattedMessages.map(({ role, content }) => ({
+    role,
+    content: [{ type: "input_text", text: content }]
+  }));
+}
+
+function extractResponseContent(responseBody) {
+  if (typeof responseBody.output_text === "string" && responseBody.output_text) {
+    return responseBody.output_text;
+  }
+
+  if (!Array.isArray(responseBody.output)) {
+    return "";
+  }
+
+  return responseBody.output
+    .flatMap((item) => (Array.isArray(item.content) ? item.content : []))
+    .map((item) => item.text)
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .join("\n");
 }
 
 app.get("/health", (req, res) => {
@@ -100,6 +227,8 @@ app.post("/v1/generate", async (req, res) => {
     clientId
   } = req.body ?? {};
 
+  if (!assertRateLimit(req, res, clientId)) return;
+
   const formattedMessages = normalizeMessages({ messages, system, prompt });
 
   if (!formattedMessages) {
@@ -114,6 +243,9 @@ app.post("/v1/generate", async (req, res) => {
     res.status(400).json({ error: "prompt exceeds MAX_PROMPT_CHARS." });
     return;
   }
+
+  const maxTokens = options.maxTokens ?? 800;
+  if (!assertBudget({ res, formattedMessages, maxTokens })) return;
 
   if (!allowedProviders.has(provider)) {
     res.status(400).json({ error: `Unsupported provider: ${provider}.` });
@@ -132,7 +264,7 @@ app.post("/v1/generate", async (req, res) => {
   );
 
   try {
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${OPENAI_BASE_URL}/responses`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -140,17 +272,14 @@ app.post("/v1/generate", async (req, res) => {
       },
       body: JSON.stringify({
         model,
-        messages: formattedMessages,
+        input: formatResponsesInput(formattedMessages),
         temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 800,
+        max_output_tokens: maxTokens,
         top_p: options.topP ?? 1,
-        presence_penalty: options.presencePenalty ?? 0,
-        frequency_penalty: options.frequencyPenalty ?? 0,
-        response_format:
+        text:
           options.responseFormat === "json"
-            ? { type: "json_object" }
+            ? { format: { type: "json_object" } }
             : undefined,
-        user: clientId || undefined,
         metadata: taskType ? { taskType } : undefined
       }),
       signal: controller.signal
@@ -163,7 +292,7 @@ app.post("/v1/generate", async (req, res) => {
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? "";
+    const content = extractResponseContent(data);
 
     res.json({
       content,
