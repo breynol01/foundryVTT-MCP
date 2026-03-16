@@ -8,9 +8,7 @@ The `foundry-mcp/` directory contains a minimal Foundry VTT module that stores p
 
 ### Install (manifest URL)
 
-1. Create a GitHub release that includes a zip named `foundry-mcp.zip` containing the `foundry-mcp/` folder at the top level.
-2. Upload the module manifest as `module.json` (use `foundry-mcp/module.json`).
-3. Install in Foundry using the manifest URL:
+In Foundry VTT, go to **Add-on Modules → Install Module** and paste this manifest URL:
 
 ```
 https://github.com/breynol01/foundryVTT-MCP/releases/latest/download/module.json
