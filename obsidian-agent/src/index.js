@@ -3,9 +3,11 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const matter = require("gray-matter");
+const { renderMarkdown } = require("./markdown");
+const { parsePdf } = require("./pdf");
 
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "10mb" }));
 
 const {
   PORT = 8790,
@@ -49,7 +51,7 @@ function assertAuth(req, res) {
   return true;
 }
 
-function walkMarkdownFiles(rootDir) {
+function walkVaultFiles(rootDir) {
   const results = [];
   const stack = [rootDir];
 
@@ -62,7 +64,7 @@ function walkMarkdownFiles(rootDir) {
       if (entry.isDirectory()) {
         if (entry.name.startsWith(".")) continue;
         stack.push(entryPath);
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".pdf"))) {
         results.push(entryPath);
       }
     }
@@ -71,18 +73,10 @@ function walkMarkdownFiles(rootDir) {
   return results;
 }
 
-function escapeHtml(value) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function mapFrontmatterToDocument({ filePath, data, content }) {
   const type = String(data.type || "journal").toLowerCase();
-  const name = data.title || data.name || path.basename(filePath, ".md");
+  const ext = path.extname(filePath);
+  const name = data.title || data.name || path.basename(filePath, ext);
   const pack = data.compendium || data.pack || undefined;
   const foundryId = data.foundryId || data._id;
 
@@ -129,43 +123,75 @@ function mapFrontmatterToDocument({ filePath, data, content }) {
   return null;
 }
 
-function loadPayload({ filePaths, filterType }) {
+async function loadPayload({ filePaths, filterType }) {
   if (!VAULT_PATH) {
     throw new Error("VAULT_PATH is required.");
   }
 
   const allFiles = filePaths?.length
     ? filePaths.map((p) => path.resolve(VAULT_PATH, p))
-    : walkMarkdownFiles(VAULT_PATH);
+    : walkVaultFiles(VAULT_PATH);
 
   const documents = [];
+  const assets = [];
 
   for (const filePath of allFiles) {
     if (documents.length >= Number(MAX_FILES)) break;
-    const raw = fs.readFileSync(filePath, "utf8");
-    const { data, content } = matter(raw);
-    if (filterType && String(data.type || "").toLowerCase() !== filterType) {
-      continue;
+
+    if (filePath.endsWith(".pdf")) {
+      const basename = path.basename(filePath, ".pdf");
+      const sidecarPath = filePath.replace(/\.pdf$/, ".yml");
+
+      let data = { type: "journal", title: basename };
+      if (fs.existsSync(sidecarPath)) {
+        const sidecarRaw = fs.readFileSync(sidecarPath, "utf8");
+        const parsed = matter(sidecarRaw);
+        data = { ...data, ...parsed.data };
+      }
+
+      if (filterType && String(data.type || "").toLowerCase() !== filterType) {
+        continue;
+      }
+
+      const result = await parsePdf(filePath);
+      const folder = `foundry-mcp/imports/${data.title || basename}`;
+
+      for (const img of result.images) {
+        assets.push({
+          filename: img.filename,
+          data: img.buffer.toString("base64"),
+          folder
+        });
+      }
+
+      const doc = mapFrontmatterToDocument({ filePath, data, content: result.html });
+      if (doc) documents.push(doc);
+    } else {
+      const raw = fs.readFileSync(filePath, "utf8");
+      const { data, content } = matter(raw);
+      if (filterType && String(data.type || "").toLowerCase() !== filterType) {
+        continue;
+      }
+      const clipped = content.slice(0, Number(MAX_CONTENT_CHARS));
+      const html = renderMarkdown(clipped);
+      const doc = mapFrontmatterToDocument({ filePath, data, content: html });
+      if (doc) documents.push(doc);
     }
-    const clipped = content.slice(0, Number(MAX_CONTENT_CHARS));
-    const html = `<pre>${escapeHtml(clipped)}</pre>`;
-    const doc = mapFrontmatterToDocument({ filePath, data, content: html });
-    if (doc) documents.push(doc);
   }
 
-  return { documents };
+  return { documents, assets };
 }
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.post("/v1/payload", (req, res) => {
+app.post("/v1/payload", async (req, res) => {
   if (!assertAuth(req, res)) return;
 
   try {
     const { paths, type } = req.body ?? {};
-    const payload = loadPayload({
+    const payload = await loadPayload({
       filePaths: Array.isArray(paths) ? paths : null,
       filterType: type ? String(type).toLowerCase() : null
     });

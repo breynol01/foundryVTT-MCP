@@ -116,6 +116,26 @@
     return documentClass.create(data, options);
   }
 
+  function replaceAssetPlaceholders(obj, assetMap) {
+    if (typeof obj === "string") {
+      for (const [placeholder, realPath] of Object.entries(assetMap)) {
+        obj = obj.replaceAll(placeholder, realPath);
+      }
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map((v) => replaceAssetPlaceholders(v, assetMap));
+    }
+    if (obj && typeof obj === "object") {
+      const result = {};
+      for (const [k, v] of Object.entries(obj)) {
+        result[k] = replaceAssetPlaceholders(v, assetMap);
+      }
+      return result;
+    }
+    return obj;
+  }
+
   async function importPayload(payload) {
     if (!payload || typeof payload !== "object") {
       throw new Error("Foundry MCP: payload must be an object.");
@@ -129,9 +149,26 @@
       : payload.document
         ? [payload.document]
         : [];
+    const assets = Array.isArray(payload.assets)
+      ? payload.assets
+      : [];
 
     for (const compendium of compendiums) {
       await ensureCompendium(compendium);
+    }
+
+    const assetMap = {};
+    for (const asset of assets) {
+      const folder = asset.folder || "foundry-mcp/imports";
+      const raw = atob(asset.data);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        bytes[i] = raw.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "image/png" });
+      const file = new File([blob], asset.filename, { type: "image/png" });
+      const result = await FilePicker.upload("data", folder, file);
+      assetMap[`__ASSET__/${asset.filename}`] = result.path;
     }
 
     if (!documents.length) {
@@ -141,10 +178,16 @@
 
     const created = [];
     for (const doc of documents) {
+      if (Object.keys(assetMap).length) {
+        doc.data = replaceAssetPlaceholders(doc.data, assetMap);
+      }
       created.push(await createDocument(doc));
     }
 
-    ui.notifications.info(`Foundry MCP: imported ${created.length} document(s).`);
+    const msg = assets.length
+      ? `Foundry MCP: imported ${created.length} document(s) with ${assets.length} asset(s).`
+      : `Foundry MCP: imported ${created.length} document(s).`;
+    ui.notifications.info(msg);
     return created;
   }
 
