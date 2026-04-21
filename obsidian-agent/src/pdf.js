@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { escapeHtml } = require("./markdown");
 
 const maxPdfPages = Math.max(1, parseInt(process.env.MAX_PDF_PAGES, 10) || 50);
 
@@ -47,11 +48,7 @@ async function parsePdf(filePath) {
     if (pageText) {
       const paragraphs = pageText.split(/\n{2,}/);
       for (const p of paragraphs) {
-        const escaped = p
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-        htmlParts.push(`<p>${escaped}</p>`);
+        htmlParts.push(`<p>${escapeHtml(p)}</p>`);
       }
     }
 

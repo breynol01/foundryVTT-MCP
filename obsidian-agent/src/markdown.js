@@ -76,7 +76,7 @@ marked.use({
           const title = customTitle || type.charAt(0).toUpperCase() + type.slice(1);
           const bodyText = text.slice(calloutMatch[0].length).replace(/^\n/, "").trim();
           const bodyHtml = bodyText ? marked.parse(bodyText) : "";
-          return `<div class="foundry-mcp-callout callout-${type}"><p class="callout-title">${escapeHtml(title)}</p>${bodyHtml}</div>`;
+          return `<div class="foundry-mcp-callout callout-${escapeHtml(type)}"><p class="callout-title">${escapeHtml(title)}</p>${bodyHtml}</div>`;
         }
       }
       return `<blockquote>\n${text}</blockquote>\n`;
@@ -88,4 +88,4 @@ function renderMarkdown(content) {
   return sanitizeHtml(marked.parse(content));
 }
 
-module.exports = { renderMarkdown };
+module.exports = { renderMarkdown, escapeHtml };

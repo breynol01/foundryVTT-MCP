@@ -14,10 +14,11 @@ const {
   PORT = 8790,
   VAULT_PATH,
   RUNNER_TOKEN,
-  ALLOWED_ORIGINS,
-  MAX_FILES = 500,
-  MAX_CONTENT_CHARS = 20000
+  ALLOWED_ORIGINS
 } = process.env;
+
+const MAX_FILES = Math.max(1, parseInt(process.env.MAX_FILES, 10) || 500);
+const MAX_CONTENT_CHARS = Math.max(1, parseInt(process.env.MAX_CONTENT_CHARS, 10) || 20000);
 
 const corsOptions = (() => {
   if (!ALLOWED_ORIGINS) return { origin: true };
@@ -56,11 +57,11 @@ function walkVaultFiles(rootDir) {
   const results = [];
   const stack = [rootDir];
 
-  while (stack.length && results.length < Number(MAX_FILES)) {
+  while (stack.length && results.length < MAX_FILES) {
     const current = stack.pop();
     const entries = fs.readdirSync(current, { withFileTypes: true });
     for (const entry of entries) {
-      if (results.length >= Number(MAX_FILES)) break;
+      if (results.length >= MAX_FILES) break;
       const entryPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
         if (entry.name.startsWith(".")) continue;
@@ -137,7 +138,7 @@ async function loadPayload({ filePaths, filterType }) {
   const assets = [];
 
   for (const filePath of allFiles) {
-    if (documents.length >= Number(MAX_FILES)) break;
+    if (documents.length >= MAX_FILES) break;
 
     try {
       if (filePath.endsWith(".pdf")) {
@@ -176,7 +177,7 @@ async function loadPayload({ filePaths, filterType }) {
         if (filterType && String(data.type || "").toLowerCase() !== filterType) {
           continue;
         }
-        const clipped = content.slice(0, Number(MAX_CONTENT_CHARS));
+        const clipped = content.slice(0, MAX_CONTENT_CHARS);
         const html = renderMarkdown(clipped);
         const doc = mapFrontmatterToDocument({ filePath, data, content: html });
         if (doc) documents.push(doc);
