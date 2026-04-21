@@ -159,9 +159,11 @@
 
     const assetMap = {};
     for (const asset of assets) {
-      const folder = asset.folder || "foundry-mcp/imports";
+      const safeName = (asset.filename || "asset.png").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeFolder = (asset.folder || "foundry-mcp/imports")
+        .split("/").map((s) => s.replace(/[^a-zA-Z0-9._-]/g, "_")).join("/");
       if (!asset.data || typeof asset.data !== "string") {
-        console.warn(`Foundry MCP: asset "${asset.filename}" has no base64 data, skipping.`);
+        console.warn(`Foundry MCP: asset "${safeName}" has no base64 data, skipping.`);
         continue;
       }
       const raw = atob(asset.data);
@@ -170,15 +172,15 @@
         bytes[i] = raw.charCodeAt(i);
       }
       const blob = new Blob([bytes], { type: "image/png" });
-      const file = new File([blob], asset.filename, { type: "image/png" });
+      const file = new File([blob], safeName, { type: "image/png" });
       let result;
       try {
-        result = await FilePicker.upload("data", folder, file);
+        result = await FilePicker.upload("data", safeFolder, file);
       } catch (err) {
-        throw new Error(`Foundry MCP: failed to upload asset "${asset.filename}" to ${folder}: ${err.message}`);
+        throw new Error(`Foundry MCP: failed to upload asset "${safeName}" to ${safeFolder}: ${err.message}`);
       }
       if (!result?.path) {
-        throw new Error(`Foundry MCP: upload returned no path for asset "${asset.filename}".`);
+        throw new Error(`Foundry MCP: upload returned no path for asset "${safeName}".`);
       }
       assetMap[`__ASSET__/${asset.filename}`] = result.path;
     }

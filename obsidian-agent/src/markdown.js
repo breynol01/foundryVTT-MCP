@@ -9,11 +9,14 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
-const UNSAFE_HTML = /<\s*\/?\s*(script|iframe|object|embed|form|link|meta|style)\b[^>]*>/gi;
-const EVENT_HANDLERS = /\s+on\w+\s*=/gi;
+const UNSAFE_TAGS = /<\s*\/?\s*(script|iframe|object|embed|form|link|meta|style)\b[^>]*>/gi;
+const TAG_WITH_EVENT_HANDLER = /<([^>]*)\s+on\w+\s*=([^>]*)>/gi;
+const EVENT_ATTR = /\s+on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi;
 
 function sanitizeHtml(html) {
-  return html.replace(UNSAFE_HTML, "").replace(EVENT_HANDLERS, " ");
+  return html
+    .replace(UNSAFE_TAGS, "")
+    .replace(TAG_WITH_EVENT_HANDLER, (match) => match.replace(EVENT_ATTR, ""));
 }
 
 const wikilink = {
