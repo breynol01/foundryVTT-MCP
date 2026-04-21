@@ -116,6 +116,26 @@
     return documentClass.create(data, options);
   }
 
+  function replaceAssetPlaceholders(obj, assetMap) {
+    if (typeof obj === "string") {
+      for (const [placeholder, realPath] of Object.entries(assetMap)) {
+        obj = obj.replaceAll(placeholder, realPath);
+      }
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map((v) => replaceAssetPlaceholders(v, assetMap));
+    }
+    if (obj && typeof obj === "object") {
+      const result = {};
+      for (const [k, v] of Object.entries(obj)) {
+        result[k] = replaceAssetPlaceholders(v, assetMap);
+      }
+      return result;
+    }
+    return obj;
+  }
+
   async function importPayload(payload) {
     if (!payload || typeof payload !== "object") {
       throw new Error("Foundry MCP: payload must be an object.");
@@ -129,9 +149,40 @@
       : payload.document
         ? [payload.document]
         : [];
+    const assets = Array.isArray(payload.assets)
+      ? payload.assets
+      : [];
 
     for (const compendium of compendiums) {
       await ensureCompendium(compendium);
+    }
+
+    const assetMap = {};
+    for (const asset of assets) {
+      const safeName = (asset.filename || "asset.png").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeFolder = (asset.folder || "foundry-mcp/imports")
+        .split("/").map((s) => s.replace(/[^a-zA-Z0-9._-]/g, "_")).join("/");
+      if (!asset.data || typeof asset.data !== "string") {
+        console.warn(`Foundry MCP: asset "${safeName}" has no base64 data, skipping.`);
+        continue;
+      }
+      const raw = atob(asset.data);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        bytes[i] = raw.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "image/png" });
+      const file = new File([blob], safeName, { type: "image/png" });
+      let result;
+      try {
+        result = await FilePicker.upload("data", safeFolder, file);
+      } catch (err) {
+        throw new Error(`Foundry MCP: failed to upload asset "${safeName}" to ${safeFolder}: ${err.message}`);
+      }
+      if (!result?.path) {
+        throw new Error(`Foundry MCP: upload returned no path for asset "${safeName}".`);
+      }
+      assetMap[`__ASSET__/${asset.filename}`] = result.path;
     }
 
     if (!documents.length) {
@@ -141,10 +192,16 @@
 
     const created = [];
     for (const doc of documents) {
+      if (Object.keys(assetMap).length) {
+        doc.data = replaceAssetPlaceholders(doc.data, assetMap);
+      }
       created.push(await createDocument(doc));
     }
 
-    ui.notifications.info(`Foundry MCP: imported ${created.length} document(s).`);
+    const msg = assets.length
+      ? `Foundry MCP: imported ${created.length} document(s) with ${assets.length} asset(s).`
+      : `Foundry MCP: imported ${created.length} document(s).`;
+    ui.notifications.info(msg);
     return created;
   }
 
@@ -266,7 +323,7 @@
               this._payload = parsed.payload || parsed;
             }
           } catch {
-            // leave payload empty
+            console.warn("Foundry MCP: LLM response is not valid JSON — import unavailable.");
           }
         }
 
@@ -277,6 +334,7 @@
         html.find("[name='payload']").val(payloadText);
         html.find("[data-action='import']").prop("disabled", !this._payload);
       } catch (error) {
+        console.error("Foundry MCP: prompt panel error:", error);
         ui.notifications.error(error.message);
       }
     }
@@ -287,7 +345,12 @@
         ui.notifications.warn("Foundry MCP: no payload to import.");
         return;
       }
-      await importPayload(this._payload);
+      try {
+        await importPayload(this._payload);
+      } catch (error) {
+        console.error("Foundry MCP: import failed:", error);
+        ui.notifications.error(`Foundry MCP: import failed — ${error.message}`);
+      }
     }
   }
 
