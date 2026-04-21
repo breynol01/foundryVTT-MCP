@@ -160,6 +160,10 @@
     const assetMap = {};
     for (const asset of assets) {
       const folder = asset.folder || "foundry-mcp/imports";
+      if (!asset.data || typeof asset.data !== "string") {
+        console.warn(`Foundry MCP: asset "${asset.filename}" has no base64 data, skipping.`);
+        continue;
+      }
       const raw = atob(asset.data);
       const bytes = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) {
@@ -167,7 +171,15 @@
       }
       const blob = new Blob([bytes], { type: "image/png" });
       const file = new File([blob], asset.filename, { type: "image/png" });
-      const result = await FilePicker.upload("data", folder, file);
+      let result;
+      try {
+        result = await FilePicker.upload("data", folder, file);
+      } catch (err) {
+        throw new Error(`Foundry MCP: failed to upload asset "${asset.filename}" to ${folder}: ${err.message}`);
+      }
+      if (!result?.path) {
+        throw new Error(`Foundry MCP: upload returned no path for asset "${asset.filename}".`);
+      }
       assetMap[`__ASSET__/${asset.filename}`] = result.path;
     }
 
@@ -309,7 +321,7 @@
               this._payload = parsed.payload || parsed;
             }
           } catch {
-            // leave payload empty
+            console.warn("Foundry MCP: LLM response is not valid JSON — import unavailable.");
           }
         }
 
@@ -320,6 +332,7 @@
         html.find("[name='payload']").val(payloadText);
         html.find("[data-action='import']").prop("disabled", !this._payload);
       } catch (error) {
+        console.error("Foundry MCP: prompt panel error:", error);
         ui.notifications.error(error.message);
       }
     }
@@ -330,7 +343,12 @@
         ui.notifications.warn("Foundry MCP: no payload to import.");
         return;
       }
-      await importPayload(this._payload);
+      try {
+        await importPayload(this._payload);
+      } catch (error) {
+        console.error("Foundry MCP: import failed:", error);
+        ui.notifications.error(`Foundry MCP: import failed — ${error.message}`);
+      }
     }
   }
 

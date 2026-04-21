@@ -1,5 +1,21 @@
 const { Marked } = require("marked");
 
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+const UNSAFE_HTML = /<\s*\/?\s*(script|iframe|object|embed|form|link|meta|style)\b[^>]*>/gi;
+const EVENT_HANDLERS = /\s+on\w+\s*=/gi;
+
+function sanitizeHtml(html) {
+  return html.replace(UNSAFE_HTML, "").replace(EVENT_HANDLERS, " ");
+}
+
 const wikilink = {
   name: "wikilink",
   level: "inline",
@@ -18,7 +34,7 @@ const wikilink = {
     }
   },
   renderer(token) {
-    return `<a class="foundry-mcp-wikilink" data-target="${token.target}">${token.display}</a>`;
+    return `<a class="foundry-mcp-wikilink" data-target="${escapeHtml(token.target)}">${escapeHtml(token.display)}</a>`;
   }
 };
 
@@ -39,7 +55,8 @@ const embed = {
     }
   },
   renderer(token) {
-    return `<div class="foundry-mcp-embed" data-target="${token.target}">[Embedded: ${token.target}]</div>`;
+    const safe = escapeHtml(token.target);
+    return `<div class="foundry-mcp-embed" data-target="${safe}">[Embedded: ${safe}]</div>`;
   }
 };
 
@@ -59,7 +76,7 @@ marked.use({
           const title = customTitle || type.charAt(0).toUpperCase() + type.slice(1);
           const bodyText = text.slice(calloutMatch[0].length).replace(/^\n/, "").trim();
           const bodyHtml = bodyText ? marked.parse(bodyText) : "";
-          return `<div class="foundry-mcp-callout callout-${type}"><p class="callout-title">${title}</p>${bodyHtml}</div>`;
+          return `<div class="foundry-mcp-callout callout-${type}"><p class="callout-title">${escapeHtml(title)}</p>${bodyHtml}</div>`;
         }
       }
       return `<blockquote>\n${text}</blockquote>\n`;
@@ -68,7 +85,7 @@ marked.use({
 });
 
 function renderMarkdown(content) {
-  return marked.parse(content);
+  return sanitizeHtml(marked.parse(content));
 }
 
 module.exports = { renderMarkdown };

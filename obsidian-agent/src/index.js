@@ -3,6 +3,7 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const matter = require("gray-matter");
+const yaml = require("js-yaml");
 const { renderMarkdown } = require("./markdown");
 const { parsePdf } = require("./pdf");
 
@@ -138,44 +139,50 @@ async function loadPayload({ filePaths, filterType }) {
   for (const filePath of allFiles) {
     if (documents.length >= Number(MAX_FILES)) break;
 
-    if (filePath.endsWith(".pdf")) {
-      const basename = path.basename(filePath, ".pdf");
-      const sidecarPath = filePath.replace(/\.pdf$/, ".yml");
+    try {
+      if (filePath.endsWith(".pdf")) {
+        const basename = path.basename(filePath, ".pdf");
+        const sidecarPath = filePath.replace(/\.pdf$/, ".yml");
 
-      let data = { type: "journal", title: basename };
-      if (fs.existsSync(sidecarPath)) {
-        const sidecarRaw = fs.readFileSync(sidecarPath, "utf8");
-        const parsed = matter(sidecarRaw);
-        data = { ...data, ...parsed.data };
+        let data = { type: "journal", title: basename };
+        if (fs.existsSync(sidecarPath)) {
+          const sidecarRaw = fs.readFileSync(sidecarPath, "utf8");
+          const parsed = yaml.load(sidecarRaw);
+          if (parsed && typeof parsed === "object") {
+            data = { ...data, ...parsed };
+          }
+        }
+
+        if (filterType && String(data.type || "").toLowerCase() !== filterType) {
+          continue;
+        }
+
+        const result = await parsePdf(filePath);
+        const folder = `foundry-mcp/imports/${data.title || basename}`;
+
+        for (const img of result.images) {
+          assets.push({
+            filename: img.filename,
+            data: img.buffer.toString("base64"),
+            folder
+          });
+        }
+
+        const doc = mapFrontmatterToDocument({ filePath, data, content: result.html });
+        if (doc) documents.push(doc);
+      } else {
+        const raw = fs.readFileSync(filePath, "utf8");
+        const { data, content } = matter(raw);
+        if (filterType && String(data.type || "").toLowerCase() !== filterType) {
+          continue;
+        }
+        const clipped = content.slice(0, Number(MAX_CONTENT_CHARS));
+        const html = renderMarkdown(clipped);
+        const doc = mapFrontmatterToDocument({ filePath, data, content: html });
+        if (doc) documents.push(doc);
       }
-
-      if (filterType && String(data.type || "").toLowerCase() !== filterType) {
-        continue;
-      }
-
-      const result = await parsePdf(filePath);
-      const folder = `foundry-mcp/imports/${data.title || basename}`;
-
-      for (const img of result.images) {
-        assets.push({
-          filename: img.filename,
-          data: img.buffer.toString("base64"),
-          folder
-        });
-      }
-
-      const doc = mapFrontmatterToDocument({ filePath, data, content: result.html });
-      if (doc) documents.push(doc);
-    } else {
-      const raw = fs.readFileSync(filePath, "utf8");
-      const { data, content } = matter(raw);
-      if (filterType && String(data.type || "").toLowerCase() !== filterType) {
-        continue;
-      }
-      const clipped = content.slice(0, Number(MAX_CONTENT_CHARS));
-      const html = renderMarkdown(clipped);
-      const doc = mapFrontmatterToDocument({ filePath, data, content: html });
-      if (doc) documents.push(doc);
+    } catch (err) {
+      console.error(`[obsidian-agent] Skipping ${filePath}: ${err.message}`);
     }
   }
 
@@ -197,6 +204,7 @@ app.post("/v1/payload", async (req, res) => {
     });
     res.json(payload);
   } catch (error) {
+    console.error("[obsidian-agent] /v1/payload failed:", error);
     res.status(500).json({ error: error.message });
   }
 });
