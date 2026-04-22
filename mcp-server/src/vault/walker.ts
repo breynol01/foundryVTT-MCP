@@ -12,7 +12,14 @@ export async function walkVaultFiles(
 
   while (stack.length > 0 && results.length < maxFiles) {
     const current = stack.pop()!;
-    const entries = await readdir(current, { withFileTypes: true });
+
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch (err) {
+      console.error(`[foundry-mcp] Cannot read directory ${current}: ${(err as Error).message}`);
+      continue;
+    }
 
     for (const entry of entries) {
       if (results.length >= maxFiles) break;

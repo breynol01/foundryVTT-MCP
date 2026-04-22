@@ -93,7 +93,7 @@ marked.use({
             .slice(calloutMatch[0].length)
             .replace(/^\n/, "")
             .trim();
-          const bodyHtml = bodyText ? (marked.parse(bodyText) as string) : "";
+          const bodyHtml = bodyText ? String(marked.parse(bodyText)) : "";
           return `<div class="foundry-mcp-callout callout-${escapeHtml(type)}"><p class="callout-title">${escapeHtml(title)}</p>${bodyHtml}</div>`;
         }
       }
@@ -103,5 +103,5 @@ marked.use({
 });
 
 export function renderMarkdown(content: string): string {
-  return sanitizeHtml(marked.parse(content) as string);
+  return sanitizeHtml(String(marked.parse(content)));
 }

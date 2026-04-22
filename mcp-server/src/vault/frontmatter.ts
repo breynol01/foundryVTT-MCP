@@ -55,7 +55,13 @@ export function mapFrontmatterToDocument({
       data: {
         _id: foundryId,
         name,
-        content,
+        pages: [
+          {
+            name,
+            type: "text",
+            text: { content, format: 1 }, // CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
+          },
+        ],
       },
     };
   }

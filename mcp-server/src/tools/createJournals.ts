@@ -27,7 +27,7 @@ export function buildImportPayload(input: CreateJournalsInput): ImportPayload {
         {
           name: doc.name,
           type: "text",
-          text: { content: doc.content, format: 1 },
+          text: { content: doc.content, format: 1 }, // CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
         },
       ],
     },
